@@ -41,14 +41,19 @@ function createHarness(options) {
         version: 348,
         token: 'token',
         profiles: [1, 2],
-        loadFails: false
+        loadFails: false,
+        launchAge: 0
     }, options || {});
 
     const state = {
         shown: [],
+        controllers: [],
         selectCalls: 0,
         backCalls: 0,
         refreshCalls: 0,
+        focusCalls: 0,
+        nativeLeftCalls: 0,
+        nativeBackCalls: 0,
         appListeners: []
     };
 
@@ -77,6 +82,11 @@ function createHarness(options) {
         Select: {
             show(object) {
                 state.shown.push(object);
+                // как настоящий Select.show: в конце регистрирует свой контроллер
+                Lampa.Controller.add('select', {
+                    left() { state.nativeLeftCalls++; },
+                    back() { state.nativeBackCalls++; }
+                });
             },
             listener: { follow() {} }
         },
@@ -103,11 +113,20 @@ function createHarness(options) {
             }
         },
         Controller: {
+            add(name, controller) {
+                state.controllers.push({ name, controller });
+            },
+            collectionFocus() {
+                state.focusCalls++;
+            },
             back() {
                 state.backCalls++;
             }
         },
         Activity: {
+            all() {
+                return [{ component: 'main' }];
+            },
             refresh() {
                 state.refreshCalls++;
             }
@@ -123,6 +142,7 @@ function createHarness(options) {
         Promise,
         Lampa
     };
+    sandbox.app_time_launch = Date.now() - (opts.launchAge || 0);
     sandbox.window = sandbox;
     sandbox.jQuery = undefined;
     sandbox.$ = undefined;
@@ -209,6 +229,45 @@ test('чужие селекты не трогаем', async () => {
     h.Lampa.Select.show({ title: 'Выбор качества', items: [{ title: '1080p' }] });
     assert(h.state.shown[0].fullsize === undefined, 'полноэкранность не навязана');
     assert(h.state.shown[0].items[0].title === '1080p', 'порядок не тронут');
+});
+
+test('у контроллера селекта рабочая горизонтальная навигация', async () => {
+    const h = createHarness({ profiles: [1, 2] });
+    boot(h);
+    await sleep(400);
+
+    const selects = h.state.controllers.filter((c) => c.name === 'select');
+    assert(selects.length > 0, 'Controller.add(select) должен вызываться');
+
+    const controller = selects[selects.length - 1].controller;
+    assert(typeof controller.right === 'function', 'right должен появиться');
+    assert(typeof controller.left === 'function', 'left должен быть нашим');
+
+    const native = h.state.nativeLeftCalls;
+    controller.left();
+    assert(h.state.nativeLeftCalls === native, 'left не должен закрывать панель');
+});
+
+test('«назад» в первые 2 секунды не закрывает гейт', async () => {
+    const h = createHarness({ profiles: [1, 2], launchAge: 0 });
+    boot(h);
+    await sleep(400);
+
+    const selects = h.state.controllers.filter((c) => c.name === 'select');
+    const controller = selects[selects.length - 1].controller;
+    controller.back();
+    assert(h.state.nativeBackCalls === 0, 'рано закрывать: окно выхода ещё недоступно');
+});
+
+test('«назад» после 2 секунд отдаём родному обработчику', async () => {
+    const h = createHarness({ profiles: [1, 2], launchAge: 5000 });
+    boot(h);
+    await sleep(400);
+
+    const selects = h.state.controllers.filter((c) => c.name === 'select');
+    const controller = selects[selects.length - 1].controller;
+    controller.back();
+    assert(h.state.nativeBackCalls === 1, 'после 2 секунд панель закрывается как обычно');
 });
 
 test('«назад» на гейте: отдаём родному обработчику', async () => {

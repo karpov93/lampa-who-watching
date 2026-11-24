@@ -2,14 +2,14 @@
  * «Кто смотрит?» — выбор профиля CUB при каждом запуске Lampa.
  *
  * Что делает:
- *   при старте Lampa (событие `app ready`) открывает родной выбор профилей
- *   (`Lampa.Account.Profile.select`) и раскладывает его горизонтальным рядом,
- *   как на стартовой PlayStation. Всё остальное — родное: панель `Select.show`,
- *   стили, фокус, подписи, добавление профиля, PIN родительского контроля.
+ *   при старте Lampa открывает родной выбор профилей (`Lampa.Account.Profile.select`)
+ *   и раскладывает его горизонтальным рядом, как на стартовой PlayStation. Всё
+ *   остальное — родное: панель `Select.show`, стили, фокус, подписи, добавление
+ *   профиля, PIN родительского контроля.
  *
  * Чего не делает:
  *   не трогает профили, открытые из шапки/настроек (они остаются вертикальным
- *   списком), не ходит в сеть, кроме проверки числа профилей, не хранит ничего.
+ *   списком), не ходит в сеть, кроме проверки числа профилей, ничего не хранит.
  *
  * Установка: «Расширения» → «Добавить плагин» → URL файла. Нужен аккаунт CUB
  * с двумя и более профилями, иначе показывать нечего.
@@ -26,13 +26,18 @@
     var STYLE_ID = 'who-watching-style';
     var MARK = 'who-watching';
     var PROFILE_ICON_RE = /\/img\/profiles\//;
-    var GATE_DELAY = 300;           // после ready — чтобы успели включиться клавиатура и слои
     var PENDING_TIMEOUT = 10000;    // маркер «наш вызов» живёт не дольше
     var EXIT_TIMEOUT = 5000;        // сколько ждём родное окно «Выход»
+    var ACTIVITY_FALLBACK = 3000;   // если событие старта активности не пришло
+    var PROFILES_TIMEOUT = 3000;    // не ждём ответ CUB бесконечно
 
     /* CSS вставляется одной строкой; всё строго под маркером .who-watching,
        чтобы не задеть ни один другой селект Lampa. */
     var CSS = [
+        /* заставка на время проверки профилей: главная не мелькает под панелью */
+        '.who-watching-cover{position:fixed;top:0;left:0;right:0;bottom:0;' +
+            'background:#1d1f20;z-index:50;opacity:1;transition:opacity .2s}',
+        '.who-watching-cover--hide{opacity:0}',
         /* панель занимает весь экран (родной режим fullsize) */
         '.who-watching .selectbox__head{padding:1.5em 2em 0}',
         '.who-watching .selectbox__title{font-size:2em}',
@@ -68,15 +73,19 @@
         '.who-watching .selectbox__content>.selectbox__text>div{font-size:1em}'
     ].join('\n');
 
-    /* Состояние гейта: pending — «следующий Select.show наш», exiting — «сейчас
-       ожидаем родное окно выхода, его отмена возвращает гейт». */
+    /* Состояние гейта:
+       pending — «следующий Select.show наш»;
+       active  — наш селект сейчас открыт (для подмены контроллера);
+       exiting — ждём родное окно «Выход», его отмена возвращает гейт. */
     var gate = {
         pending: false,
         pendingTimer: 0,
         exiting: false,
         exitTimer: 0,
+        active: false,
         opened: false,
-        panel: null
+        panel: null,
+        cover: null
     };
 
     function log() {
@@ -114,6 +123,32 @@
         }
     }
 
+    /* Заставка: от включения до первого кадра выбора профиля за app не видно
+       главной. Если профилей меньше двух — заставка уходит, Lampa как обычно. */
+    function showCover() {
+        try {
+            if (gate.cover || !document.body) return;
+            var el = document.createElement('div');
+            el.className = 'who-watching-cover';
+            document.body.appendChild(el);
+            gate.cover = el;
+        } catch (e) {
+            log('cover', e);
+        }
+    }
+
+    function hideCover() {
+        var el = gate.cover;
+        gate.cover = null;
+        if (!el) return;
+        try {
+            el.className = el.className + ' who-watching-cover--hide';
+            setTimeout(function () {
+                if (el.parentNode) el.parentNode.removeChild(el);
+            }, 250);
+        } catch (e) {}
+    }
+
     function isProfiles(items) {
         for (var i = 0; i < items.length; i++) {
             if (items[i] && typeof items[i].icon === 'string' && PROFILE_ICON_RE.test(items[i].icon)) return true;
@@ -128,8 +163,6 @@
         return false;
     }
 
-    /* Наш вызов профилей: экран на весь экран, профили в естественном порядке,
-       «Добавить профиль» — последней плиткой. */
     /* Если у профиля в CUB нет картинки (или файл не открылся), родной список
        Lampa показывает «битую» картинку. В нашем ряду подставляем родную
        заглушку Lampa — ту же, что она ставит иконке профиля в шапке. */
@@ -141,7 +174,11 @@
         return item;
     }
 
+    /* Наш вызов профилей: экран на весь экран, профили в естественном порядке,
+       «Добавить профиль» — последней плиткой. */
     function prepareGate(object) {
+        gate.active = true;
+        log('gate open');
         object.fullsize = true;
         object.items = object.items.slice().reverse().map(withIconFallback);
 
@@ -166,6 +203,7 @@
             } catch (e) {
                 log('onBack', e);
             }
+            gate.active = false;
             requestExit();
         };
     }
@@ -188,6 +226,8 @@
             follow(panel, this);
         });
         updateMask(panel);
+
+        hideCover();
 
         setTimeout(function () {
             follow(panel, panel.find('.selectbox-item.focus')[0] || panel.find('.selectbox-item')[0]);
@@ -217,6 +257,65 @@
         panel.find('.scroll').toggleClass('scroll--mask', overflow);
     }
 
+    /* Родной контроллер селекта умеет «вверх/вниз», а «влево» закрывает панель:
+       для горизонтального ряда это неверно. Подменяем навигацию на нашей панели:
+       влево/вправо — соседняя плитка, вверх/вниз — ничего (ряд один). */
+    /* Lampa показывает своё окно «Выход» только через 2 секунды после запуска
+       (иначе «назад» просто ничего не делает). Пока окна нет — не закрываем
+       гейт: иначе нажатие «назад» тихо оставляло бы нас в приложении. */
+    function exitReady() {
+        var launched = window.app_time_launch || 0;
+        return !launched || Date.now() > launched + 2100;
+    }
+
+    function tune(controller) {
+        var nativeBack = controller.back;
+        controller.left = function () { focusStep(-1); };
+        controller.right = function () { focusStep(1); };
+        controller.up = function () {};
+        controller.down = function () {};
+        controller.back = function () {
+            if (!exitReady()) return;
+            if (nativeBack) nativeBack.apply(this, arguments);
+        };
+    }
+
+    function focusStep(step) {
+        try {
+            var panel = gate.panel;
+            if (!panel || typeof panel.find !== 'function') return;
+            var items = panel.find('.selectbox-item.selector');
+            if (!items.length) return;
+            var current = items.index(items.filter('.focus'));
+            if (current < 0) current = 0;
+            var next = Math.min(items.length - 1, Math.max(0, current + step));
+            if (next === current) return;
+            Lampa.Controller.collectionFocus(items.eq(next), panel);
+        } catch (e) {
+            log('focus', e);
+        }
+    }
+
+    function patchController() {
+        try {
+            if (!Lampa.Controller || typeof Lampa.Controller.add !== 'function') return;
+            if (Lampa.Controller.add.__who_watching) return;
+            var add = Lampa.Controller.add;
+            var wrapped = function (name, controller) {
+                try {
+                    if (name === 'select' && gate.active && controller) tune(controller);
+                } catch (e) {
+                    log('controller', e);
+                }
+                return add.apply(this, arguments);
+            };
+            wrapped.__who_watching = true;
+            Lampa.Controller.add = wrapped;
+        } catch (e) {
+            log('patch controller', e);
+        }
+    }
+
     function openGate() {
         if (!supported()) return;
         gate.pending = true;
@@ -230,6 +329,7 @@
             });
         } catch (e) {
             gate.pending = false;
+            hideCover();
             log('select', e);
         }
     }
@@ -331,6 +431,66 @@
                 if (gate.panel) updateMask(gate.panel);
             });
         } catch (e) {}
+
+        try {
+            Lampa.Select.listener.follow('hide', function () {
+                if (gate.active) log('select hidden');
+                gate.active = false;
+                gate.panel = null;
+                hideCover();
+            });
+            Lampa.Select.listener.follow('close', function () {
+                if (gate.active) log('select closed');
+                gate.active = false;
+                gate.panel = null;
+                hideCover();
+            });
+        } catch (e) {
+            log('subscribe select', e);
+        }
+    }
+
+    /* Гейт открываем после старта первой активности: иначе старт главной
+       перехватывает контроллер и кнопки пульта «не работают». */
+    function whenStarted(callback) {
+        var done = false;
+        function finish() {
+            if (done) return;
+            done = true;
+            callback();
+        }
+        try {
+            if (Lampa.Activity.all && Lampa.Activity.all().length) {
+                setTimeout(finish, 60);
+                return;
+            }
+            Lampa.Listener.follow('activity', function (e) {
+                if (e && e.type === 'start') setTimeout(finish, 60);
+            });
+        } catch (e) {}
+        setTimeout(finish, ACTIVITY_FALLBACK);
+    }
+
+    function profileCount(callback) {
+        var done = false;
+        function finish(list) {
+            if (done) return;
+            done = true;
+            callback(list || []);
+        }
+        setTimeout(function () { finish([]); }, PROFILES_TIMEOUT);
+        try {
+            var request = Lampa.Account.Api.load('profiles/all');
+            if (!request || typeof request.then !== 'function') return finish([]);
+            request.then(function (result) {
+                finish((result && result.profiles) || []);
+            })['catch'](function (e) {
+                log('profiles/all', e && e.message ? e.message : e);
+                finish([]);
+            });
+        } catch (e) {
+            finish([]);
+        }
     }
 
     function maybeGate() {
@@ -343,27 +503,30 @@
             return;
         }
 
-        var request;
-        try {
-            request = Lampa.Account.Api.load('profiles/all');
-        } catch (e) {
-            return;
-        }
-        if (!request || typeof request.then !== 'function') return;
-
-        request.then(function (result) {
-            var list = (result && result.profiles) || [];
-            if (gate.opened || list.length < 2) return; // один профиль — спрашивать нечего
-            gate.opened = true;
-            setTimeout(openGate, GATE_DELAY);
-        })['catch'](function (e) {
-            log('profiles/all', e && e.message ? e.message : e);
+        showCover();
+        profileCount(function (list) {
+            log('profiles', list.length);
+            if (gate.opened) return;
+            if (list.length < 2) { // один профиль — спрашивать нечего
+                hideCover();
+                return;
+            }
+            whenStarted(function () {
+                log('activity started, opening gate');
+                if (gate.opened) {
+                    hideCover();
+                    return;
+                }
+                gate.opened = true;
+                openGate();
+            });
         });
     }
 
     function init() {
         injectStyle();
         try {
+            patchController();
             wrapSelect();
         } catch (e) {
             log('wrap', e);
