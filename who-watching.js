@@ -30,7 +30,6 @@
     var EXIT_TIMEOUT = 5000;        // сколько ждём родное окно «Выход»
     var ACTIVITY_FALLBACK = 3000;   // если событие старта активности не пришло
     var PROFILES_TIMEOUT = 3000;    // не ждём ответ CUB бесконечно
-    var ONCE_KEY = 'who_watching_once'; // метка «это перезагрузка после выбора профиля»
 
     /* CSS вставляется одной строкой; всё строго под маркером .who-watching,
        чтобы не задеть ни один другой селект Lampa. */
@@ -85,7 +84,7 @@
         exitTimer: 0,
         active: false,
         opened: false,
-        suppressed: false,
+        profileId: null,
         panel: null,
         focused: null,
         cover: null
@@ -199,11 +198,14 @@
             }
         };
 
+        gate.profileId = currentProfileId();
+
         var select = object.onSelect;
         object.onSelect = function (item) {
             var result = select && select.apply(this, arguments);
-            // «Добавить профиль» — не смена профиля, перезагружать нечего
-            if (item && item.clone) scheduleReload();
+            var chosen = item && item.clone;
+            // тот же профиль уже загружен — панель просто закрывается
+            if (chosen && chosen.id !== gate.profileId) refreshMain();
             return result;
         };
 
@@ -441,42 +443,30 @@
         Lampa.Select.show = wrapped;
     }
 
-    /* После выбора профиля Lampa сама главную не пересобирает: на экране
-       остались бы строки прошлого профиля. Перезагружаем приложение — так же,
-       как Lampa делает при входе в аккаунт. Перезагрузка помечается, чтобы
-       гейт не открылся по кругу. */
-    function scheduleReload() {
+    /* Профиль, под которым Lampa работает сейчас (его и показывает главная). */
+    function currentProfileId() {
         try {
-            sessionStorage.setItem(ONCE_KEY, String(Date.now()));
+            return Lampa.Account.Permit.profile.id;
         } catch (e) {
-            // нет sessionStorage — хотя бы пересоберём главную без перезапуска
-            setTimeout(function () {
-                try {
-                    Lampa.Activity.refresh();
-                } catch (err) {
-                    log('refresh', err);
-                }
-            }, 250);
-            return;
+            return null;
         }
-        setTimeout(function () {
-            try {
-                window.location.reload();
-            } catch (e) {
-                log('reload', e);
-            }
-        }, 60);
     }
 
-    function onceFresh() {
-        try {
-            var stored = parseInt(sessionStorage.getItem(ONCE_KEY) || '0', 10);
-            if (stored && Date.now() - stored < 20000) {
-                sessionStorage.removeItem(ONCE_KEY);
-                return true;
+    /* Смена профиля: главную пересобираем под новый профиль, приложение не
+       перезагружаем. Activity.replace пересоздаёт активность без загрузчика,
+       который показывает refresh(). */
+    function refreshMain() {
+        setTimeout(function () {
+            try {
+                if (Lampa.Activity && typeof Lampa.Activity.replace === 'function') {
+                    Lampa.Activity.replace();
+                } else {
+                    Lampa.Activity.refresh();
+                }
+            } catch (e) {
+                log('refresh', e);
             }
-        } catch (e) {}
-        return false;
+        }, 120);
     }
 
     function subscribe() {
@@ -550,7 +540,7 @@
     }
 
     function maybeGate() {
-        if (gate.suppressed || gate.opened || !supported()) return;
+        if (gate.opened || !supported()) return;
 
         try {
             if (window.lampa_settings && window.lampa_settings.account_use === false) return;
@@ -595,13 +585,9 @@
     /* Заставку ставим сразу при загрузке плагина, ещё до Render.app: главная
        успевает отрисоваться раньше события ready, и на телевизоре её видно
        через полупрозрачный экран загрузки. */
-    gate.suppressed = onceFresh();
-
     try {
         injectStyle(); // заставке нужен CSS до события ready
-        if (!gate.suppressed && window.Lampa && Lampa.Account && Lampa.Account.Permit && Lampa.Account.Permit.token) {
-            showCover();
-        }
+        if (window.Lampa && Lampa.Account && Lampa.Account.Permit && Lampa.Account.Permit.token) showCover();
     } catch (e) {}
 
     try {
