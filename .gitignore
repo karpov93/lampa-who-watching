@@ -1,7 +1,8 @@
-# локальная копия Lampa для стенда вёрстки (dev/preview.html)
+﻿# локальная копия Lampa для стенда вёрстки (dev/preview.html)
 dev/lampa/
 
 # служебное
+.tmp/
 node_modules/
 .DS_Store
 Thumbs.db

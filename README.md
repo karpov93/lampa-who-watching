@@ -63,9 +63,9 @@
 copy C:\ProgramData\TorrWatch\Lampa\versions\<коммит>\css   dev\lampa\css -Recurse
 copy C:\ProgramData\TorrWatch\Lampa\versions\<коммит>\fonts dev\lampa\fonts -Recurse
 
-# локальный сервер (file:// не подойдёт — плагин и CSS грузятся по HTTP)
-python -m http.server 8765
-# затем открыть http://127.0.0.1:8765/dev/preview.html
+# локальный сервер; `/` сразу открывает стенд
+python tools/serve.py 8765
+# затем открыть http://127.0.0.1:8765/
 ```
 
 Тесты (без зависимостей, заглушка Lampa в `vm`):

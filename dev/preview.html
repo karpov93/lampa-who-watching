@@ -21,6 +21,7 @@
         }
         .stand-controls button.on { background: #fff; color: #000; }
         .stand-hint { opacity: .6; margin-top: .6em; max-width: 22em; }
+        .stand-status { margin-top: .6em; font: 12px/1.4 Consolas, monospace; opacity: .75; max-width: 24em; }
     </style>
 </head>
 <body class="selectbox--open">
@@ -40,6 +41,7 @@
         <button data-theme="light">светлая</button>
     </div>
     <div class="stand-hint">Стрелки ← → — фокус, как в Lampa. Панель и стили — родные; от плагина только раскладка ряда.</div>
+    <div class="stand-status" id="stand-status">загрузка…</div>
 </div>
 
 <!-- Разметка повторяет родной selectbox Lampa 3.4.8 -->
@@ -72,7 +74,7 @@
         Select: { show: noop, listener: { follow: noop } },
         Account: {
             Permit: {},
-            Api: { load: function () { return { then: noop, 'catch': noop }; } },
+            Api: { load: function () { var p = { then: function () { return p; }, 'catch': function () { return p; } }; return p; } },
             listener: { follow: noop },
             Profile: { select: noop }
         },
@@ -82,33 +84,61 @@
     window.Lampa = stubLampa;
     window.appready = true;
 </script>
+<script>
+    window.addEventListener('error', function (e) {
+        var el = document.getElementById('stand-status');
+        if (el) el.textContent = 'Ошибка: ' + (e.message || e.type) + (e.filename ? ' (' + e.filename.split('/').pop() + ')' : '');
+    });
+</script>
 <script src="../who-watching.js"></script>
 <script>
     (function () {
         'use strict';
 
         var names = ['Андрей', 'Ольга', 'Миша', 'Аня', 'Даша', 'Серёжа', 'Катя', 'Папа'];
-        var colors = ['#3b6ea5', '#8a4f7d', '#2f7d5b', '#a5643b', '#4a5aa0', '#7d6a2f', '#a03b3b', '#3b7da0'];
+        /* Настоящие иконки профилей CUB — те же, что Lampa показывает в меню
+           профилей. Если ноутбук без интернета — подставится родная заглушка
+           Lampa (dev/lampa/img/img_load.svg), вёрстка от этого не страдает. */
+        var icons = ['l_1', 'f_1', 'l_2', 'f_2', 'l_3', 'f_3', 'l_4', 'f_4'];
+        var iconFails = 0;
         var body = document.getElementById('scroll-body');
         var panel = document.getElementById('panel');
         var scroll = document.getElementById('scroll');
         var current = 0;
         var count = 3;
 
-        function icon(index, name) {
-            var letter = name.charAt(0).toUpperCase();
-            var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">' +
-                '<rect width="96" height="96" rx="20" fill="' + colors[index % colors.length] + '"/>' +
-                '<text x="48" y="64" font-family="SegoeUI, Arial" font-size="44" fill="#fff" ' +
-                'text-anchor="middle">' + letter + '</text></svg>';
-            return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        /* Lampa берёт иконки с cub_domain, а он зависит от региона:
+           cub.best / cub.black / cub.red. Пробуем по очереди, в конце —
+           родная заглушка Lampa. */
+        var iconHosts = ['cub.best', 'cub.black', 'cub.red'];
+
+        window.WW_ICON_FAIL = function (img) {
+            var src = img.getAttribute('src') || '';
+            var host = null;
+            var i;
+            for (i = 0; i < iconHosts.length; i++) {
+                if (src.indexOf(iconHosts[i]) >= 0) { host = i; break; }
+            }
+            if (host !== null && host + 1 < iconHosts.length) {
+                img.setAttribute('src', src.replace(iconHosts[host], iconHosts[host + 1]));
+                return;
+            }
+            iconFails++;
+            img.onerror = null;
+            img.setAttribute('src', 'lampa/img/img_load.svg');
+            setTimeout(updateStatus, 0);
+        };
+
+        function icon(index) {
+            return 'https://cub.best/img/profiles/' + icons[index % icons.length] + '.png';
         }
 
         function item(index, name, subtitle) {
             var el = document.createElement('div');
             el.className = 'selectbox-item selectbox-item--icon selector';
             el.innerHTML =
-                '<div class="selectbox-item__icon"><img src="' + icon(index, name) + '"></div>' +
+                '<div class="selectbox-item__icon"><img src="' + icon(index) +
+                '" onerror="WW_ICON_FAIL(this)"></div>' +
                 '<div><div class="selectbox-item__title">' + name + '</div>' +
                 '<div class="selectbox-item__subtitle">' + (subtitle || '') + '</div></div>';
             return el;
@@ -205,6 +235,19 @@
 
         render();
         window.addEventListener('resize', updateMask);
+
+        function updateStatus() {
+            var status = document.getElementById('stand-status');
+            if (!status) return;
+            var rect = panel.getBoundingClientRect();
+            status.textContent = 'плиток: ' + items().length +
+                ', панель: ' + Math.round(rect.width) + 'x' + Math.round(rect.height) +
+                ', ряд: ' + Math.round(body.scrollWidth) + 'px в ' + Math.round(body.clientWidth) + 'px' +
+                ', иконок с заглушкой: ' + iconFails;
+        }
+
+        updateStatus();
+        setTimeout(updateStatus, 1200);
     })();
 </script>
 </body>
