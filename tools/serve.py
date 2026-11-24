@@ -18,9 +18,20 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
 
 
+TEXT_TYPES = ('text/', 'application/javascript', 'application/json', 'image/svg+xml')
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=ROOT, **kwargs)
+
+    def guess_type(self, path):
+        # без charset браузер (и особенно встроенный в телевизор) может решить,
+        # что кириллица в .js/.css/.html — это windows-1251
+        result = super().guess_type(path)
+        if result.startswith(TEXT_TYPES) and 'charset' not in result:
+            result += '; charset=utf-8'
+        return result
 
     def do_GET(self):
         if self.path in ('/', '/index.html'):
