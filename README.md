@@ -5,7 +5,7 @@
 профиля и PIN родительского контроля; от плагина — только раскладка и момент показа.
 
 ```
-Установка:  Расширения → Добавить плагин → https://<username>.github.io/lampa-who-watching/who-watching.js
+Установка:  Расширения → Добавить плагин → https://karpov93.github.io/lampa-who-watching/who-watching.js
 ```
 
 ## Что делает

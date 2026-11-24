@@ -161,6 +161,17 @@ test('2 профиля: гейт открывается, экран fullsize, п
     assert(object.items[2].title === 'Добавить профиль', '«Добавить профиль» — последним');
 });
 
+test('у иконки профиля есть родная заглушка на случай 404', async () => {
+    const h = createHarness({ profiles: [1, 2] });
+    boot(h);
+    await sleep(GATE_DELAY + 200);
+
+    const object = h.state.shown[0];
+    assert(object.items[0].icon.indexOf('onerror=') >= 0, 'onerror должен быть у иконки профиля');
+    assert(object.items[0].icon.indexOf('img_load.svg') >= 0, 'заглушка — родная img_load.svg');
+    assert(object.items[2].icon.indexOf('img_load.svg') < 0, 'у «Добавить профиль» своя иконка');
+});
+
 test('один профиль: гейт не показывается', async () => {
     const h = createHarness({ profiles: [1] });
     boot(h);

@@ -130,9 +130,20 @@
 
     /* Наш вызов профилей: экран на весь экран, профили в естественном порядке,
        «Добавить профиль» — последней плиткой. */
+    /* Если у профиля в CUB нет картинки (или файл не открылся), родной список
+       Lampa показывает «битую» картинку. В нашем ряду подставляем родную
+       заглушку Lampa — ту же, что она ставит иконке профиля в шапке. */
+    function withIconFallback(item) {
+        if (item && typeof item.icon === 'string' && PROFILE_ICON_RE.test(item.icon)) {
+            item.icon = item.icon.replace('<img ',
+                '<img onerror="this.onerror=null;this.src=\'./img/img_load.svg\'" ');
+        }
+        return item;
+    }
+
     function prepareGate(object) {
         object.fullsize = true;
-        object.items = object.items.slice().reverse();
+        object.items = object.items.slice().reverse().map(withIconFallback);
 
         var draw = object.onFullDraw;
         object.onFullDraw = function (scroll) {
