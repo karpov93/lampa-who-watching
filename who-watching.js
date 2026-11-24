@@ -383,7 +383,23 @@
         };
     }
 
+    /* Селектбокс в Lampa один на всё приложение: если наши классы остались
+       на нём после закрытия гейта, они перекрашивают и окно «Выход», и
+       профили из шапки. Поэтому перед каждым новым селектом снимаем маркеры;
+       для своего вызова decorate поставит их снова. */
+    function stripMarkers() {
+        try {
+            var $el = window.jQuery || window.$;
+            if (!$el) return;
+            $el('.selectbox.' + MARK).removeClass(MARK + ' who-watching--overflow');
+            $el('.selectbox .scroll.scroll--horizontal').removeClass('scroll--horizontal');
+        } catch (e) {
+            log('strip', e);
+        }
+    }
+
     function inspect(object) {
+        stripMarkers();
         if (!object || !object.items || !object.items.length) return;
         if (gate.exiting && isExitPrompt(object.items)) {
             wrapExit(object);
