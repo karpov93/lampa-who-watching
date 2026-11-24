@@ -85,6 +85,7 @@
         active: false,
         opened: false,
         panel: null,
+        focused: null,
         cover: null
     };
 
@@ -223,6 +224,7 @@
 
         gate.panel = panel;
         panel.on('hover:focus', '.selectbox-item', function () {
+            gate.focused = this;
             follow(panel, this);
         });
         updateMask(panel);
@@ -286,7 +288,8 @@
             if (!panel || typeof panel.find !== 'function') return;
             var items = panel.find('.selectbox-item.selector');
             if (!items.length) return;
-            var current = items.index(items.filter('.focus'));
+            var current = gate.focused ? items.index(gate.focused) : -1;
+            if (current < 0) current = items.index(items.filter('.focus'));
             if (current < 0) current = 0;
             var next = Math.min(items.length - 1, Math.max(0, current + step));
             if (next === current) return;
@@ -437,12 +440,14 @@
                 if (gate.active) log('select hidden');
                 gate.active = false;
                 gate.panel = null;
+                gate.focused = null;
                 hideCover();
             });
             Lampa.Select.listener.follow('close', function () {
                 if (gate.active) log('select closed');
                 gate.active = false;
                 gate.panel = null;
+                gate.focused = null;
                 hideCover();
             });
         } catch (e) {
