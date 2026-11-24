@@ -36,7 +36,7 @@
     var CSS = [
         /* заставка на время проверки профилей: главная не мелькает под панелью */
         '.who-watching-cover{position:fixed;top:0;left:0;right:0;bottom:0;' +
-            'background:#1d1f20;z-index:50;opacity:1;transition:opacity .2s}',
+            'background:#1d1f20;z-index:54;opacity:1;transition:opacity .2s}',
         '.who-watching-cover--hide{opacity:0}',
         /* панель занимает весь экран (родной режим fullsize) */
         '.who-watching .selectbox__head{padding:1.5em 2em 0}',
@@ -229,7 +229,8 @@
         });
         updateMask(panel);
 
-        hideCover();
+        // панель выезжает 0.2 с: заставку убираем, когда она уже на месте
+        setTimeout(hideCover, 260);
 
         setTimeout(function () {
             follow(panel, panel.find('.selectbox-item.focus')[0] || panel.find('.selectbox-item')[0]);
@@ -556,6 +557,14 @@
         log('init', Lampa.Manifest ? Lampa.Manifest.app_version : '?');
         setTimeout(maybeGate, 0);
     }
+
+    /* Заставку ставим сразу при загрузке плагина, ещё до Render.app: главная
+       успевает отрисоваться раньше события ready, и на телевизоре её видно
+       через полупрозрачный экран загрузки. */
+    try {
+        injectStyle(); // заставке нужен CSS до события ready
+        if (window.Lampa && Lampa.Account && Lampa.Account.Permit && Lampa.Account.Permit.token) showCover();
+    } catch (e) {}
 
     try {
         if (window.appready) init();
