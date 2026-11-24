@@ -42,7 +42,8 @@ function createHarness(options) {
         token: 'token',
         profiles: [1, 2],
         loadFails: false,
-        launchAge: 0
+        launchAge: 0,
+        onceAge: 0
     }, options || {});
 
     const state = {
@@ -54,6 +55,7 @@ function createHarness(options) {
         focusCalls: 0,
         nativeLeftCalls: 0,
         nativeBackCalls: 0,
+        reloads: 0,
         appListeners: []
     };
 
@@ -143,6 +145,20 @@ function createHarness(options) {
         Lampa
     };
     sandbox.app_time_launch = Date.now() - (opts.launchAge || 0);
+
+    const store = new Map();
+    if (opts.onceAge) store.set('who_watching_once', String(Date.now() - opts.onceAge));
+    sandbox.sessionStorage = {
+        getItem: (k) => (store.has(k) ? store.get(k) : null),
+        setItem: (k, v) => store.set(k, String(v)),
+        removeItem: (k) => store.delete(k)
+    };
+    state.store = store;
+    sandbox.location = {
+        reload() {
+            state.reloads++;
+        }
+    };
     sandbox.window = sandbox;
     sandbox.jQuery = undefined;
     sandbox.$ = undefined;
@@ -246,6 +262,38 @@ test('у контроллера селекта рабочая горизонта
     const native = h.state.nativeLeftCalls;
     controller.left();
     assert(h.state.nativeLeftCalls === native, 'left не должен закрывать панель');
+});
+
+test('выбор профиля перезапускает приложение и ставит метку', async () => {
+    const h = createHarness({ profiles: [1, 2] });
+    boot(h);
+    await sleep(400);
+
+    h.state.shown[0].onSelect({ clone: { id: 2 } });
+    await sleep(200);
+
+    assert(h.state.store.has('who_watching_once'), 'метка перезагрузки должна быть записана');
+    assert(h.state.reloads === 1, 'приложение должно перезагрузиться один раз');
+});
+
+test('«Добавить профиль» не перезагружает приложение', async () => {
+    const h = createHarness({ profiles: [1, 2] });
+    boot(h);
+    await sleep(400);
+
+    // у пункта «Добавить профиль» нет clone — это не смена профиля
+    h.state.shown[0].onSelect({ title: 'Добавить профиль' });
+    await sleep(200);
+
+    assert(h.state.reloads === 0, 'создание профиля не повод для перезапуска');
+});
+
+test('перезагрузка после выбора не открывает гейт по кругу', async () => {
+    const h = createHarness({ profiles: [1, 2], onceAge: 1000 });
+    boot(h);
+    await sleep(400);
+
+    assert(h.state.selectCalls === 0, 'на перезагрузке после выбора гейт не показывается');
 });
 
 test('«назад» в первые 2 секунды не закрывает гейт', async () => {
