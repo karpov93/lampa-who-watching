@@ -14,6 +14,19 @@ https://karpov93.github.io/lampa-who-watching/who-watching.js
 
 После добавления перезагрузить Lampa. Плагин подтягивается при каждом запуске, поэтому обновляется сам.
 
+## Приватность
+
+- **Ничего не собирает.** Ни аналитики, ни счётчиков, ни идентификаторов, ни логов.
+- **Ничего не хранит.** Не пишет в настройки Lampa и не создаёт своих ключей: какой профиль был последним, помнит
+  сама Lampa.
+- **Своих запросов нет.** Единственное обращение к сети — `profiles/all` через API самой Lampa, чтобы узнать число
+  профилей; ровно этот же запрос Lampa делает сама, когда вы открываете выбор профиля.
+- **Данные аккаунта и токен никуда не передаются.** Плагин лишь просит Lampa показать её родной экран выбора.
+- **Всё видно.** Один файл, около 550 строк, без сборки, минификации и зависимостей — можно прочитать целиком.
+
+Оговорка для честности: как и любой плагин Lampa, этот код выполняется внутри страницы приложения и технически
+видит то же, что видит сама Lampa. Поэтому проверять его стоит по коду — он открыт и лежит в этом репозитории.
+
 ## Что делает
 
 - **Спрашивает профиль при каждом запуске.** Не «раз в сутки» и не «запомнить»: включили телевизор — выбрали,
@@ -113,7 +126,8 @@ node test/plugin.test.js
 
 Lampa plugin that shows the CUB profile picker on every app launch, laid out as a horizontal row of tiles
 while keeping Lampa's native look. Requires Lampa 3.4.8+, a CUB account and at least two
-profiles. Install as any Lampa plugin: Settings → Extensions → add plugin URL. MIT.
+profiles. Install as any Lampa plugin: Settings → Extensions → add plugin URL. The plugin collects nothing and makes
+no network requests of its own. MIT.
 
 ## Лицензия
 
