@@ -45,9 +45,9 @@ https://karpov93.github.io/lampa-who-watching/who-watching.js
 
 ![Панель «Профили» — веб-версия](docs/screenshot-web.png)
 
-Телевизор со включённой стеклянной темой:
+С включённой стеклянной темой:
 
-![Панель «Профили» на телевизоре](docs/screenshot-tv.jpg)
+![Панель «Профили» со стеклянной темой](docs/screenshot-glass.jpg)
 
 Имена профилей на скриншотах заменены.
 
